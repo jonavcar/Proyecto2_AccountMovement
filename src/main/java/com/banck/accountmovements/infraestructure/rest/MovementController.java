@@ -108,7 +108,7 @@ public class MovementController {
                 }
 
                 movement.setMovementType(MovementType.CHARGE.value);
-                movement.setObservations("Retiro de dinero por la suma de " + movement.getAmount());
+                movement.setObservations("Retiro por la suma de " + movement.getAmount());
             }
 
             if (Concept.PAYMENT.equals(movement.getConcept())) {
@@ -116,7 +116,7 @@ public class MovementController {
                     movement.setAmount(-1 * movement.getAmount());
                 }
                 movement.setMovementType(MovementType.PAYMENT.value);
-                movement.setObservations("Deposito de dinero por la suma de " + movement.getAmount());
+                movement.setObservations("Deposito por la suma de " + movement.getAmount());
             }
 
             return operations.listByAccount(movement.getAccount()).collect(Collectors.summingDouble(ui -> ui.getAmount())).flatMap(balance -> {
@@ -240,7 +240,7 @@ public class MovementController {
                 if ((balance + movement.getAmount()) < 0) {
                     return Mono.just(ResponseEntity.ok("El movimiento a efectuar sobrepasa el saldo disponible."));
                 } else {
-
+                    rqMovement.setTransferCustomer(rqMovement.getCustomer());
                     rqMovement.setMovement(rqMovement.getCustomer() + "-" + getRandomNumberString());
                     rqMovement.setDate(dateTime.format(formatDate));
                     rqMovement.setTime(dateTime.format(formatTime));
@@ -255,9 +255,7 @@ public class MovementController {
                             movement.setMovementType(MovementType.PAYMENT.value);
                             movement.setObservations("Transferencia desde la cuenta " + mCG.getAccount() + " por la suma de " + movement.getAmount());
                         }
-                        movement.setTransferAccount(mCG.getAccount());
-                        movement.setTransferCustomer(mCG.getCustomer());
-
+                        rqMovement.setAccount(mCG.getTransferAccount());
                         rqMovement.setMovement(movement.getCustomer() + "-" + getRandomNumberString());
                         rqMovement.setDate(dateTime.format(formatDate));
                         rqMovement.setTime(dateTime.format(formatTime));
