@@ -256,6 +256,7 @@ public class MovementController {
                             movement.setObservations("Transferencia desde la cuenta " + mCG.getAccount() + " por la suma de " + movement.getAmount());
                         }
                         rqMovement.setAccount(mCG.getTransferAccount());
+                        rqMovement.setTransferAccount(mCG.getAccount());
                         rqMovement.setMovement(movement.getCustomer() + "-" + getRandomNumberString());
                         rqMovement.setDate(dateTime.format(formatDate));
                         rqMovement.setTime(dateTime.format(formatTime));
