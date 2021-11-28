@@ -135,10 +135,6 @@ public class MovementController {
 
     @PostMapping("/transfer/other-account")
     public Mono<ResponseEntity> transferOtherAccounts(@RequestBody Movement rqMovement) {
-        rqMovement.setMovement(rqMovement.getCustomer() + "-" + getRandomNumberString());
-        rqMovement.setDate(dateTime.format(formatDate));
-        rqMovement.setTime(dateTime.format(formatTime));
-        rqMovement.setCorrect(true);
         return Mono.just(rqMovement).flatMap(movement -> {
 
             if (Optional.ofNullable(movement.getCustomer()).isEmpty()) {
@@ -177,6 +173,11 @@ public class MovementController {
                     return Mono.just(ResponseEntity.ok("El movimiento a efectuar sobrepasa el saldo disponible."));
                 } else {
 
+                    rqMovement.setMovement(rqMovement.getCustomer() + "-" + getRandomNumberString());
+                    rqMovement.setDate(dateTime.format(formatDate));
+                    rqMovement.setTime(dateTime.format(formatTime));
+                    rqMovement.setCorrect(true);
+
                     return operations.create(movement).flatMap(mCG -> {
                         if (Concept.TRANSFER.equals(movement.getConcept())) {
                             if (movement.getAmount() < 0) {
@@ -184,12 +185,18 @@ public class MovementController {
                             }
 
                             movement.setMovementType(MovementType.PAYMENT.value);
-                            movement.setObservations("Transferencia desde la cuenta " + movement.getAccount() + " por la suma de " + movement.getAmount());
+                            movement.setObservations("Transferencia desde la cuenta " + mCG.getAccount() + " por la suma de " + movement.getAmount());
                         }
                         movement.setAccount(movement.getTransferAccount());
                         movement.setCustomer(movement.getTransferCustomer());
-                        movement.setTransferAccount(movement.getAccount());
-                        movement.setTransferCustomer(movement.getCustomer());
+                        movement.setTransferAccount(mCG.getAccount());
+                        movement.setTransferCustomer(mCG.getCustomer());
+
+                        rqMovement.setMovement(movement.getCustomer() + "-" + getRandomNumberString());
+                        rqMovement.setDate(dateTime.format(formatDate));
+                        rqMovement.setTime(dateTime.format(formatTime));
+                        rqMovement.setCorrect(true);
+
                         return operations.create(movement).flatMap(mAB -> {
                             return Mono.just(ResponseEntity.ok(mCG));
                         });
@@ -201,10 +208,6 @@ public class MovementController {
 
     @PostMapping("/transfer/my-account")
     public Mono<ResponseEntity> transferMyAccounts(@RequestBody Movement rqMovement) {
-        rqMovement.setMovement(rqMovement.getCustomer() + "-" + getRandomNumberString());
-        rqMovement.setDate(dateTime.format(formatDate));
-        rqMovement.setTime(dateTime.format(formatTime));
-        rqMovement.setCorrect(true);
         return Mono.just(rqMovement).flatMap(movement -> {
 
             if (Optional.ofNullable(movement.getCustomer()).isEmpty()) {
@@ -237,6 +240,12 @@ public class MovementController {
                 if ((balance + movement.getAmount()) < 0) {
                     return Mono.just(ResponseEntity.ok("El movimiento a efectuar sobrepasa el saldo disponible."));
                 } else {
+
+                    rqMovement.setMovement(rqMovement.getCustomer() + "-" + getRandomNumberString());
+                    rqMovement.setDate(dateTime.format(formatDate));
+                    rqMovement.setTime(dateTime.format(formatTime));
+                    rqMovement.setCorrect(true);
+
                     return operations.create(movement).flatMap(mCG -> {
                         if (Concept.TRANSFER.equals(movement.getConcept())) {
                             if (movement.getAmount() < 0) {
@@ -244,9 +253,16 @@ public class MovementController {
                             }
 
                             movement.setMovementType(MovementType.PAYMENT.value);
-                            movement.setObservations("Transferencia desde la cuenta " + movement.getAccount() + " por la suma de " + movement.getAmount());
+                            movement.setObservations("Transferencia desde la cuenta " + mCG.getAccount() + " por la suma de " + movement.getAmount());
                         }
-                        movement.setTransferCustomer(movement.getCustomer());
+                        movement.setTransferAccount(mCG.getAccount());
+                        movement.setTransferCustomer(mCG.getCustomer());
+
+                        rqMovement.setMovement(movement.getCustomer() + "-" + getRandomNumberString());
+                        rqMovement.setDate(dateTime.format(formatDate));
+                        rqMovement.setTime(dateTime.format(formatTime));
+                        rqMovement.setCorrect(true);
+
                         return operations.create(movement).flatMap(mAB -> {
                             return Mono.just(ResponseEntity.ok(mCG));
                         });
