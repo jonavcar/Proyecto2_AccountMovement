@@ -9,18 +9,18 @@ package com.banck.accountmovements.utils;
  * @author jonavcar
  */
 public enum Concept {
-    CHARGE("ABONO") {
+    CHARGE("RT") {
         @Override
         public boolean equals(String movementType) {
             return value.equals(movementType);
         }
     },
-    PAYMENT("RETIRO") {
+    PAYMENT("DP") {
         @Override
         public boolean equals(String movementType) {
             return value.equals(movementType);
         }
-    }, TRANSFER("TRANSFERENCIA") {
+    }, TRANSFER("TF") {
         @Override
         public boolean equals(String movementType) {
             return value.equals(movementType);

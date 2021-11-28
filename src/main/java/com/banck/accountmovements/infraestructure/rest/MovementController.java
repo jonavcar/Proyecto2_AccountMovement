@@ -18,7 +18,6 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.Random;
 import com.banck.accountmovements.aplication.MovementOperations;
-import com.banck.accountmovements.utils.AccountType;
 import com.banck.accountmovements.utils.Concept;
 import com.banck.accountmovements.utils.MovementType;
 import java.util.Optional;
@@ -66,31 +65,68 @@ public class MovementController {
     }
 
     @PostMapping
-    public Mono<ResponseEntity> create(@RequestBody Movement c) {
-        c.setMovement(c.getCustomer() + "-" + getRandomNumberString());
-        c.setDate(dateTime.format(formatDate));
-        c.setTime(dateTime.format(formatTime));
-        c.setCorrect(true);
-        return Mono.just(c).flatMap(o -> {
+    public Mono<ResponseEntity> create(@RequestBody Movement rqMovement) {
+        rqMovement.setMovement(rqMovement.getCustomer() + "-" + getRandomNumberString());
+        rqMovement.setDate(dateTime.format(formatDate));
+        rqMovement.setTime(dateTime.format(formatTime));
+        rqMovement.setCorrect(true);
+        return Mono.just(rqMovement).flatMap(movement -> {
+            String msgConceptos = ""
+                    + "Deposito = {\"concept\": \"DP\"}\n"
+                    + "Retiro = {\"concept\": \"RT\"}";
 
-            return operations.listByCustomerAndAccount(c.getCustomer(), c.getAccount()).collect(Collectors.summingDouble(Movement::getAmount)).flatMap(r -> {
+            if (Optional.ofNullable(movement.getConcept()).isEmpty()) {
+                return Mono.just(ResponseEntity.ok("Debe ingresar Concepto, Ejemplo:\n" + msgConceptos));
+            }
 
-                boolean isMovementType = false;
-                for (MovementType tc : MovementType.values()) {
-                    if (c.getMovementType().equals(tc.value)) {
-                        isMovementType = true;
-                    }
+            boolean isConcept = false;
+            for (Concept tc : Concept.values()) {
+                if (movement.getConcept().equals(tc.value)) {
+                    isConcept = true;
+                }
+            }
+
+            if (!isConcept) {
+                return Mono.just(ResponseEntity.ok("Los codigos de Concepto son: \n" + msgConceptos));
+            }
+
+            if (Optional.ofNullable(movement.getCustomer()).isEmpty()) {
+                return Mono.just(ResponseEntity.ok("Debe ingresar su Identificacion, Ejemplo: { \"customer\": \"78345212\" }"));
+            }
+
+            if (Optional.ofNullable(movement.getAccount()).isEmpty()) {
+                return Mono.just(ResponseEntity.ok("Debe ingresar la cuenta, Ejemplo: { \"account\": \"78345212-653\" }"));
+            }
+
+            if (Optional.ofNullable(movement.getAmount()).isEmpty() || movement.getAmount() == 0) {
+                return Mono.just(ResponseEntity.ok("Debe ingresar el monto diferente de cero, Ejemplo: { \"amount\": \"300.50\" }"));
+            }
+
+            if (Concept.CHARGE.equals(movement.getConcept())) {
+                if (movement.getAmount() > 0) {
+                    movement.setAmount(-1 * movement.getAmount());
                 }
 
-                if (!isMovementType) {
-                    return Mono.just(ResponseEntity.ok("El codigo de Tipo Movimiento (" + c.getMovementType() + "), no existe!"));
-                }
+                movement.setMovementType(MovementType.CHARGE.value);
+                movement.setObservations("Retiro de dinero por la suma de " + movement.getAmount());
+            }
 
-                if ((r + c.getAmount()) < 0) {
+            if (Concept.PAYMENT.equals(movement.getConcept())) {
+                if (movement.getAmount() < 0) {
+                    movement.setAmount(-1 * movement.getAmount());
+                }
+                movement.setMovementType(MovementType.PAYMENT.value);
+                movement.setObservations("Deposito de dinero por la suma de " + movement.getAmount());
+            }
+
+            return operations.listByAccount(movement.getAccount()).collect(Collectors.summingDouble(ui -> ui.getAmount())).flatMap(balance -> {
+                if ((balance + movement.getAmount()) < 0) {
                     return Mono.just(ResponseEntity.ok("El movimiento a efectuar sobrepasa el saldo disponible."));
                 } else {
-                    return operations.create(c).flatMap(i -> {
-                        return Mono.just(ResponseEntity.ok(i));
+                    movement.setTransferAccount("");
+                    movement.setTransferCustomer("");
+                    return operations.create(movement).flatMap(mCG -> {
+                        return Mono.just(ResponseEntity.ok(mCG));
                     });
                 }
             });
@@ -110,11 +146,11 @@ public class MovementController {
             }
 
             if (Optional.ofNullable(movement.getAccount()).isEmpty()) {
-                return Mono.just(ResponseEntity.ok("Debe ingresar la cuenta de CARGO, Ejemplo: { \"account\": \"78345212-653\" }"));
+                return Mono.just(ResponseEntity.ok("Debe ingresar la cuenta de Origen, Ejemplo: { \"account\": \"78345212-653\" }"));
             }
 
             if (Optional.ofNullable(movement.getTransferAccount()).isEmpty()) {
-                return Mono.just(ResponseEntity.ok("Debe ingresar la cuenta de ABONO, Ejemplo: { \"transferAccount\": \"78345212-653\" }"));
+                return Mono.just(ResponseEntity.ok("Debe ingresar la cuenta de Destino, Ejemplo: { \"transferAccount\": \"78345212-653\" }"));
             }
 
             if (Optional.ofNullable(movement.getTransferCustomer()).isEmpty()) {
@@ -125,27 +161,35 @@ public class MovementController {
                 return Mono.just(ResponseEntity.ok("Debe ingresar el monto diferente de cero, Ejemplo: { \"amount\": \"300.50\" }"));
             }
 
-            if (movement.getAmount() > 0) {
-                movement.setAmount(-1 * movement.getAmount());
+            movement.setConcept(Concept.TRANSFER.value);
+
+            if (Concept.TRANSFER.equals(movement.getConcept())) {
+                if (movement.getAmount() > 0) {
+                    movement.setAmount(-1 * movement.getAmount());
+                }
+
+                movement.setMovementType(MovementType.CHARGE.value);
+                movement.setObservations("Transferencia a la cuenta " + movement.getTransferAccount() + " por la suma de " + movement.getAmount() * -1);
             }
-            movement.setObservations("Tranferncia bancaria otras cuentas");
 
             return operations.listByAccount(movement.getAccount()).collect(Collectors.summingDouble(ui -> ui.getAmount())).flatMap(balance -> {
                 if ((balance + movement.getAmount()) < 0) {
                     return Mono.just(ResponseEntity.ok("El movimiento a efectuar sobrepasa el saldo disponible."));
                 } else {
-                    movement.setMovementType(MovementType.CHARGE.value);
-                    movement.setConcept(Concept.TRANSFER.value);
+
                     return operations.create(movement).flatMap(mCG -> {
-                        movement.setMovementType(MovementType.PAYMENT.value);
-                        movement.setConcept(Concept.TRANSFER.value);
+                        if (Concept.TRANSFER.equals(movement.getConcept())) {
+                            if (movement.getAmount() < 0) {
+                                movement.setAmount(-1 * movement.getAmount());
+                            }
+
+                            movement.setMovementType(MovementType.PAYMENT.value);
+                            movement.setObservations("Transferencia desde la cuenta " + movement.getAccount() + " por la suma de " + movement.getAmount());
+                        }
                         movement.setAccount(movement.getTransferAccount());
                         movement.setCustomer(movement.getTransferCustomer());
                         movement.setTransferAccount(movement.getAccount());
                         movement.setTransferCustomer(movement.getCustomer());
-                        if (movement.getAmount() < 0) {
-                            movement.setAmount(-1 * movement.getAmount());
-                        }
                         return operations.create(movement).flatMap(mAB -> {
                             return Mono.just(ResponseEntity.ok(mCG));
                         });
@@ -168,34 +212,41 @@ public class MovementController {
             }
 
             if (Optional.ofNullable(movement.getAccount()).isEmpty()) {
-                return Mono.just(ResponseEntity.ok("Debe ingresar la cuenta de CARGO, Ejemplo: { \"account\": \"78345212-653\" }"));
+                return Mono.just(ResponseEntity.ok("Debe ingresar la cuenta de Origen, Ejemplo: { \"account\": \"78345212-653\" }"));
             }
 
             if (Optional.ofNullable(movement.getTransferAccount()).isEmpty()) {
-                return Mono.just(ResponseEntity.ok("Debe ingresar la cuenta de ABONO, Ejemplo: { \"transferAccount\": \"78345212-653\" }"));
+                return Mono.just(ResponseEntity.ok("Debe ingresar la cuenta de Destino, Ejemplo: { \"transferAccount\": \"78345212-653\" }"));
             }
             if (Optional.ofNullable(movement.getAmount()).isEmpty() || movement.getAmount() == 0) {
                 return Mono.just(ResponseEntity.ok("Debe ingresar el monto diferente de cero, Ejemplo: { \"amount\": \"300.50\" }"));
             }
 
-            if (movement.getAmount() > 0) {
-                movement.setAmount(-1 * movement.getAmount());
+            movement.setConcept(Concept.TRANSFER.value);
+
+            if (Concept.TRANSFER.equals(movement.getConcept())) {
+                if (movement.getAmount() > 0) {
+                    movement.setAmount(-1 * movement.getAmount());
+                }
+
+                movement.setMovementType(MovementType.CHARGE.value);
+                movement.setObservations("Transferencia a la cuenta " + movement.getTransferAccount() + " por la suma de " + movement.getAmount() * -1);
             }
-            movement.setObservations("Tranferncia bancaria mis cuentas");
 
             return operations.listByAccount(movement.getAccount()).collect(Collectors.summingDouble(ui -> ui.getAmount())).flatMap(balance -> {
                 if ((balance + movement.getAmount()) < 0) {
                     return Mono.just(ResponseEntity.ok("El movimiento a efectuar sobrepasa el saldo disponible."));
                 } else {
-                    movement.setMovementType(MovementType.CHARGE.value);
-                    movement.setConcept(Concept.TRANSFER.value);
                     return operations.create(movement).flatMap(mCG -> {
-                        movement.setMovementType(MovementType.PAYMENT.value);
-                        movement.setConcept(Concept.TRANSFER.value);
-                        movement.setTransferCustomer(movement.getCustomer());
-                        if (movement.getAmount() < 0) {
-                            movement.setAmount(-1 * movement.getAmount());
+                        if (Concept.TRANSFER.equals(movement.getConcept())) {
+                            if (movement.getAmount() < 0) {
+                                movement.setAmount(-1 * movement.getAmount());
+                            }
+
+                            movement.setMovementType(MovementType.PAYMENT.value);
+                            movement.setObservations("Transferencia desde la cuenta " + movement.getAccount() + " por la suma de " + movement.getAmount());
                         }
+                        movement.setTransferCustomer(movement.getCustomer());
                         return operations.create(movement).flatMap(mAB -> {
                             return Mono.just(ResponseEntity.ok(mCG));
                         });
