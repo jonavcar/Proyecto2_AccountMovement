@@ -1,0 +1,10 @@
+server:
+  port: 8083
+
+spring:
+  application:
+    name: accountmovement-microservice
+  cloud:
+    config:
+      enable: true
+      uri: http://api-configserver:9997
